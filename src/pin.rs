@@ -4,9 +4,9 @@ use shakmaty::{Bitboard, Chess, Color, File, Piece, Pieces, Rank, Role, Setup, S
 use std::ops::Not;
 use std::str::FromStr;
 
-pub fn is_absolutely_pinned(position: shakmaty::Chess, square: shakmaty::Square) -> bool {
+pub fn is_absolutely_pinned(position: shakmaty::Chess, pinned: shakmaty::Square) -> bool {
     let board = position.board();
-    let piece = match board.piece_at(square) {
+    let piece = match board.piece_at(pinned) {
         None => return false,
         Some(p) => p,
     };
@@ -14,26 +14,40 @@ pub fn is_absolutely_pinned(position: shakmaty::Chess, square: shakmaty::Square)
     let attacker = defender.not();
 
     let same_color_king = position.board().king_of(defender).unwrap();
-    if (same_color_king == square) {
+    if (same_color_king == pinned) {
         return false;
     };
 
-    let attacking_king_on_empty_board =
+    let attacking_target_on_empty_board =
         position
             .board()
             .attacks_to(same_color_king, attacker, Bitboard::EMPTY);
-    let attacking_potential_pin_on_empty_board =
-        position
-            .board()
-            .attacks_to(square, attacker, Bitboard::EMPTY);
 
-    let attacking_both = attacking_potential_pin_on_empty_board & attacking_king_on_empty_board;
-
-    let attacks_go_through = attacking_both
+    attacking_target_on_empty_board
         .into_iter()
-        .filter(|s| shakmaty::attacks::aligned(*s, square, same_color_king));
+        .map(|attacker| is_pinned(board.clone(), attacker, same_color_king, pinned))
+        .any(|b| b)
+}
 
-    attacks_go_through.count() != 0
+fn is_pinned(
+    board: shakmaty::Board,
+    attacker: shakmaty::Square,
+    target: shakmaty::Square,
+    pin: shakmaty::Square,
+) -> bool {
+    let aligned = shakmaty::attacks::aligned(attacker, target, pin);
+    if !aligned {
+        return false;
+    }
+
+    let attack_ray = shakmaty::attacks::ray(attacker, target);
+    if !attack_ray.contains(pin) {
+        return false;
+    }
+
+    let all_pieces_of_attacked_color = board.by_color(board.piece_at(target).unwrap().color);
+
+    (attack_ray & all_pieces_of_attacked_color) == shakmaty::Bitboard::from_square(pin)
 }
 
 #[cfg(test)]
