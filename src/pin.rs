@@ -24,7 +24,8 @@ pub fn is_absolutely_pinned(position: &Chess, pinned: Square) -> bool {
     let attacking_target_on_empty_board =
         position
             .board()
-            .attacks_to(same_color_king, attacker, Bitboard::EMPTY);
+            .attacks_to(same_color_king, attacker, Bitboard::EMPTY)
+            & board.sliders();
 
     attacking_target_on_empty_board
         .into_iter()
