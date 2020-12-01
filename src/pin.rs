@@ -1,5 +1,5 @@
 use shakmaty;
-use shakmaty::attacks;
+use shakmaty::{attacks, Role, Role::*};
 use shakmaty::{Bitboard, Board, Chess, Setup, Square};
 use std::ops::{BitXor, Not};
 
@@ -13,9 +13,14 @@ pub fn is_relative_pin(position: &Chess, pinned_piece: Square) -> bool {
     let defender = piece.color;
     let attacker = defender.not();
 
-    let potential_targets = board
-        .by_color(defender)
-        .bitxor(Bitboard::from_square(pinned_piece));
+    let potential_targets = ((board.by_color(defender))
+        & piece
+            .role
+            .higher_values()
+            .iter()
+            .map(|&&r| board.by_role(r))
+            .fold(Bitboard::EMPTY, |acc, bb| acc | bb))
+        ^ Bitboard::from_square(pinned_piece);
 
     potential_targets
         .into_iter()
@@ -72,6 +77,38 @@ fn is_pinned(board: Board, attacker: Square, target: Square, pin: Square) -> boo
         .bitxor(Bitboard::from_square(target));
 
     (attack_ray & defender_pieces_not_target) == Bitboard::from_square(pin)
+}
+
+trait RolePoints: Ord {
+    fn points(&self) -> Option<u8>;
+    fn higher_values(&self) -> Vec<&Role>;
+    fn is_higher_value(&self, r: Role) -> bool;
+}
+
+const ROLES: [Role; 6] = [Pawn, Knight, Bishop, Rook, Queen, King];
+
+impl RolePoints for Role {
+    fn points(&self) -> Option<u8> {
+        match self {
+            Pawn => Some(1),
+            Knight => Some(3),
+            Bishop => Some(3),
+            Rook => Some(5),
+            Queen => Some(9),
+            King => None,
+        }
+    }
+
+    fn higher_values(&self) -> Vec<&Role> {
+        ROLES.iter().filter(|&&r| self.is_higher_value(r)).collect()
+    }
+
+    fn is_higher_value(&self, r: Role) -> bool {
+        r == r;
+        r.points()
+            .and_then(|r| self.points().map(|p| r > p))
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(test)]
@@ -185,11 +222,11 @@ mod tests {
             assert!(!is_relative_pin(&position, Square::A1));
         }
 
-        // #[test]
-        // fn pinned_piece_must_be_of_lower_value_than_target() {
-        //     let position = rook_attacks_bishop_through_queen();
-        //     assert!(!is_relative_pin(&position, Square::E4));
-        // }
+        #[test]
+        fn pinned_piece_must_be_of_lower_value_than_target() {
+            let position = rook_attacks_bishop_through_queen();
+            assert!(!is_relative_pin(&position, Square::E4));
+        }
     }
 
     pub fn pretty_board(board: &Board) -> String {
