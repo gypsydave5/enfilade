@@ -1,15 +1,38 @@
 use shakmaty;
 use shakmaty::attacks;
 use shakmaty::{Bitboard, Board, Chess, Setup, Square};
-use std::ops::Not;
+use std::ops::{BitXor, Not};
 
-pub fn is_relative_pin(_position: &Chess, _pinned: Square) -> bool {
-    true
+pub fn is_relative_pin(position: &Chess, pinned_piece: Square) -> bool {
+    let board = position.board();
+    let piece = match board.piece_at(pinned_piece) {
+        None => return false,
+        Some(p) => p,
+    };
+
+    let defender = piece.color;
+    let attacker = defender.not();
+
+    let potential_targets = board
+        .by_color(defender)
+        .bitxor(Bitboard::from_square(pinned_piece));
+
+    potential_targets
+        .into_iter()
+        .flat_map(|target| {
+            position
+                .board()
+                .attacks_to(target, attacker, Bitboard::EMPTY)
+                .into_iter()
+                .map(move |attacker| (target, attacker))
+        })
+        .map(|(target, attacker)| is_pinned(board.clone(), attacker, target, pinned_piece))
+        .any(|b| b)
 }
 
-pub fn is_absolutely_pinned(position: &Chess, pinned: Square) -> bool {
+pub fn is_absolutely_pinned(position: &Chess, pinned_piece: Square) -> bool {
     let board = position.board();
-    let piece = match board.piece_at(pinned) {
+    let piece = match board.piece_at(pinned_piece) {
         None => return false,
         Some(p) => p,
     };
@@ -17,7 +40,7 @@ pub fn is_absolutely_pinned(position: &Chess, pinned: Square) -> bool {
     let attacker = defender.not();
 
     let same_color_king = position.board().king_of(defender).unwrap();
-    if same_color_king == pinned {
+    if same_color_king == pinned_piece {
         return false;
     };
 
@@ -29,7 +52,7 @@ pub fn is_absolutely_pinned(position: &Chess, pinned: Square) -> bool {
 
     attacking_target_on_empty_board
         .into_iter()
-        .map(|attacker| is_pinned(board.clone(), attacker, same_color_king, pinned))
+        .map(|attacker| is_pinned(board.clone(), attacker, same_color_king, pinned_piece))
         .any(|b| b)
 }
 
@@ -44,9 +67,11 @@ fn is_pinned(board: Board, attacker: Square, target: Square, pin: Square) -> boo
         return false;
     }
 
-    let all_pieces_of_attacked_color = board.by_color(board.piece_at(target).unwrap().color);
+    let defender_pieces_not_target = board
+        .by_color(board.piece_at(target).unwrap().color)
+        .bitxor(Bitboard::from_square(target));
 
-    (attack_ray & all_pieces_of_attacked_color) == Bitboard::from_square(pin)
+    (attack_ray & defender_pieces_not_target) == Bitboard::from_square(pin)
 }
 
 #[cfg(test)]
@@ -78,6 +103,14 @@ mod tests {
 
     fn rook_attacks_rook_through_bishop() -> Chess {
         position_of("4r2k/8/8/8/4B3/8/8/4R2K w - - 0 1")
+    }
+
+    fn rook_attacks_queen_and_bishop() -> Chess {
+        position_of("r6B/1K6/8/3k4/8/8/8/Q7 w - - 0 1")
+    }
+
+    fn rook_attacks_bishop_through_queen() -> Chess {
+        position_of("4r2k/8/8/8/4Q3/8/8/4B2K w - - 0 1")
     }
 
     #[test]
@@ -133,7 +166,10 @@ mod tests {
 
     mod is_relative_pin {
         use crate::pin::is_relative_pin;
-        use crate::pin::tests::rook_attacks_rook_through_bishop;
+        use crate::pin::tests::{
+            rook_attacks_bishop_through_queen, rook_attacks_queen_and_bishop,
+            rook_attacks_rook_through_bishop,
+        };
         use shakmaty::Square;
 
         #[test]
@@ -141,6 +177,19 @@ mod tests {
             let position = rook_attacks_rook_through_bishop();
             assert!(is_relative_pin(&position, Square::E4))
         }
+
+        #[test]
+        fn relative_pin_must_go_through_pieces() {
+            let position = rook_attacks_queen_and_bishop();
+            assert!(!is_relative_pin(&position, Square::H8));
+            assert!(!is_relative_pin(&position, Square::A1));
+        }
+
+        // #[test]
+        // fn pinned_piece_must_be_of_lower_value_than_target() {
+        //     let position = rook_attacks_bishop_through_queen();
+        //     assert!(!is_relative_pin(&position, Square::E4));
+        // }
     }
 
     pub fn pretty_board(board: &Board) -> String {
