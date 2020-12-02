@@ -1,7 +1,25 @@
+use crate::pin::Pin::{Absolute, AbsoluteAndRelative, Relative};
 use shakmaty;
-use shakmaty::{attacks, Role, Role::*};
-use shakmaty::{Bitboard, Board, Chess, Setup, Square};
+use shakmaty::{attacks, Bitboard, Board, Chess, Role, Role::*, Setup, Square};
 use std::ops::{BitXor, Not};
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Pin {
+    Absolute,
+    Relative,
+    AbsoluteAndRelative,
+}
+
+pub fn is_pin(position: &Chess, pinned_piece: Square) -> Option<Pin> {
+    let abs = is_absolutely_pinned(position, pinned_piece);
+    let rel = is_relative_pin(position, pinned_piece);
+    match (abs, rel) {
+        (true, true) => Some(AbsoluteAndRelative),
+        (true, false) => Some(Absolute),
+        (false, true) => Some(Relative),
+        _ => None,
+    }
+}
 
 pub fn is_relative_pin(position: &Chess, pinned_piece: Square) -> bool {
     let board = position.board();
@@ -13,14 +31,7 @@ pub fn is_relative_pin(position: &Chess, pinned_piece: Square) -> bool {
     let defender = piece.color;
     let attacker = defender.not();
 
-    let potential_targets = ((board.by_color(defender))
-        & piece
-            .role
-            .higher_values()
-            .iter()
-            .map(|&&r| board.by_role(r))
-            .fold(Bitboard::EMPTY, |acc, bb| acc | bb))
-        ^ Bitboard::from_square(pinned_piece);
+    let potential_targets = (board.by_color(defender)) & board.by_higher_valued_roles(piece.role);
 
     potential_targets
         .into_iter()
@@ -44,20 +55,20 @@ pub fn is_absolutely_pinned(position: &Chess, pinned_piece: Square) -> bool {
     let defender = piece.color;
     let attacker = defender.not();
 
-    let same_color_king = position.board().king_of(defender).unwrap();
-    if same_color_king == pinned_piece {
+    let defending_king = position.board().king_of(defender).unwrap();
+    if defending_king == pinned_piece {
         return false;
     };
 
     let attacking_target_on_empty_board =
         position
             .board()
-            .attacks_to(same_color_king, attacker, Bitboard::EMPTY)
+            .attacks_to(defending_king, attacker, Bitboard::EMPTY)
             & board.sliders();
 
     attacking_target_on_empty_board
         .into_iter()
-        .map(|attacker| is_pinned(board.clone(), attacker, same_color_king, pinned_piece))
+        .map(|attacker| is_pinned(board.clone(), attacker, defending_king, pinned_piece))
         .any(|b| b)
 }
 
@@ -79,10 +90,23 @@ fn is_pinned(board: Board, attacker: Square, target: Square, pin: Square) -> boo
     (attack_ray & defender_pieces_not_target) == Bitboard::from_square(pin)
 }
 
-trait RolePoints: Ord {
+trait RolePoints {
     fn points(&self) -> Option<u8>;
-    fn higher_values(&self) -> Vec<&Role>;
+    fn higher_value_roles(&self) -> Vec<&Role>;
     fn is_higher_value(&self, r: Role) -> bool;
+}
+
+trait RoleBoard {
+    fn by_higher_valued_roles(&self, r: Role) -> Bitboard;
+}
+
+impl RoleBoard for Board {
+    fn by_higher_valued_roles(&self, r: Role) -> Bitboard {
+        r.higher_value_roles()
+            .iter()
+            .map(|&&r| self.by_role(r))
+            .fold(Bitboard::EMPTY, |acc, bb| acc | bb)
+    }
 }
 
 const ROLES: [Role; 6] = [Pawn, Knight, Bishop, Rook, Queen, King];
@@ -99,12 +123,11 @@ impl RolePoints for Role {
         }
     }
 
-    fn higher_values(&self) -> Vec<&Role> {
+    fn higher_value_roles(&self) -> Vec<&Role> {
         ROLES.iter().filter(|&&r| self.is_higher_value(r)).collect()
     }
 
     fn is_higher_value(&self, r: Role) -> bool {
-        r == r;
         r.points()
             .and_then(|r| self.points().map(|p| r > p))
             .unwrap_or(false)
@@ -150,9 +173,45 @@ mod tests {
         position_of("4r2k/8/8/8/4Q3/8/8/4B2K w - - 0 1")
     }
 
-    #[test]
-    fn testing() {
-        assert!(true)
+    mod is_pin {
+        use crate::pin::is_pin;
+        use crate::pin::tests::position_of;
+        use crate::pin::Pin::*;
+        use shakmaty::Square;
+
+        macro_rules! test_is_pin {
+            ($name:ident, $fen:expr, $square:expr, $expected:expr) => {
+                #[test]
+                fn $name() {
+                    let position = position_of($fen);
+                    let result = is_pin(&position, $square);
+                    assert_eq!(result, Some($expected));
+                }
+            };
+        }
+
+        macro_rules! test_is_not_pin {
+            ($name:ident, $fen:expr, $square:expr) => {
+                #[test]
+                fn $name() {
+                    let position = position_of($fen);
+                    let result = is_pin(&position, $square);
+                    assert_eq!(result, None);
+                }
+            };
+        }
+
+        test_is_pin!(
+            pin_on_e2,
+            "8/1k6/8/8/8/8/1r2P1K1/8 w - - 0 1",
+            Square::E2,
+            Absolute
+        );
+        test_is_not_pin!(
+            no_pin_on_e3,
+            "8/1k6/8/8/8/8/1r2P1K1/8 w - - 0 1",
+            Square::E3
+        );
     }
 
     mod absolute_pin {
