@@ -73,11 +73,6 @@ pub fn is_absolutely_pinned(position: &Chess, pinned_piece: Square) -> bool {
 }
 
 fn is_pinned(board: Board, attacker: Square, target: Square, pin: Square) -> bool {
-    let aligned = attacks::aligned(attacker, target, pin);
-    if !aligned {
-        return false;
-    }
-
     let attack_ray = shakmaty::attacks::ray(attacker, target);
     if !attack_ray.contains(pin) {
         return false;
