@@ -1,7 +1,9 @@
-use crate::pin::Pin::{Absolute, AbsoluteAndRelative, Relative};
-use shakmaty;
-use shakmaty::{attacks, Bitboard, Board, Chess, Role, Role::*, Setup, Square};
 use std::ops::{BitXor, Not};
+
+use shakmaty;
+use shakmaty::{Bitboard, Board, Chess, Role, Role::*, Setup, Square};
+
+use crate::pin::Pin::{Absolute, AbsoluteAndRelative, Relative};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Pin {
