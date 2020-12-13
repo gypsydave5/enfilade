@@ -38,7 +38,7 @@ fn rook_attacks_bishop_through_queen() -> Chess {
 mod is_pin {
     use crate::pin::is_pin;
     use crate::pin::tests::position_of;
-    use crate::pin::Pin::*;
+    use crate::pin::Pins::*;
     use shakmaty::Square;
 
     macro_rules! test_is_pin {
