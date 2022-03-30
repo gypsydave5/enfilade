@@ -1,5 +1,5 @@
 use shakmaty;
-use shakmaty::{Bitboard, Board, Chess, Role, Setup, Square};
+use shakmaty::{Bitboard, Board, Chess, Position, Role, Setup, Square};
 
 use crate::pin::Pins::{Absolute, AbsoluteAndRelative, Relative};
 

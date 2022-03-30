@@ -2,8 +2,9 @@ use std::error::Error;
 use std::io;
 use std::str::FromStr;
 
-use shakmaty::fen::Fen;
 use shakmaty::{Chess, Position, Setup};
+use shakmaty::CastlingMode::Standard;
+use shakmaty::fen::Fen;
 
 use pin::Pinning;
 
@@ -15,7 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     stdin.read_line(&mut fen)?;
     let fen = fen.trim();
     let setup: Fen = fen.parse()?;
-    let position: Chess = setup.position()?;
+    let position: Chess = setup.into_position(Standard)?;
 
     let mut mv = String::new();
     stdin.read_line(&mut mv)?;
